@@ -1,8 +1,8 @@
 build:
-	go build -o ./bin/bcproject
+	go build -o ./bin/projectx
 
 run: build
-	./bin/bcproject
+	./bin/projectx
 
 test:
-	go test -v -count=1 ./...
+	go test ./...

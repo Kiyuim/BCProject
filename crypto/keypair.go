@@ -5,6 +5,8 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
+	"io"
 	"math/big"
 
 	"github.com/Kiyuim/BCProject/types"
@@ -21,13 +23,13 @@ func (k PrivateKey) Sign(data []byte) (*Signature, error) {
 	}
 
 	return &Signature{
-		r: r,
-		s: s,
+		R: r,
+		S: s,
 	}, nil
 }
 
-func GeneratePrivateKey() PrivateKey {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+func NewPrivateKeyFromReader(r io.Reader) PrivateKey {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), r)
 	if err != nil {
 		panic(err)
 	}
@@ -37,30 +39,43 @@ func GeneratePrivateKey() PrivateKey {
 	}
 }
 
+func GeneratePrivateKey() PrivateKey {
+	return NewPrivateKeyFromReader(rand.Reader)
+}
+
 func (k PrivateKey) PublicKey() PublicKey {
-	return PublicKey{
-		key: &k.key.PublicKey,
-	}
+	return elliptic.MarshalCompressed(k.key.PublicKey, k.key.PublicKey.X, k.key.PublicKey.Y)
 }
 
-type PublicKey struct {
-	key *ecdsa.PublicKey
-}
+type PublicKey []byte
 
-func (k PublicKey) ToSlice() []byte {
-	return elliptic.MarshalCompressed(k.key, k.key.X, k.key.Y)
+func (k PublicKey) String() string {
+	return hex.EncodeToString(k)
 }
 
 func (k PublicKey) Address() types.Address {
-	h := sha256.Sum256(k.ToSlice())
+	h := sha256.Sum256(k)
 
 	return types.AddressFromBytes(h[len(h)-20:])
 }
 
 type Signature struct {
-	s, r *big.Int
+	S *big.Int
+	R *big.Int
+}
+
+func (sig Signature) String() string {
+	b := append(sig.S.Bytes(), sig.R.Bytes()...)
+	return hex.EncodeToString(b)
 }
 
 func (sig Signature) Verify(pubKey PublicKey, data []byte) bool {
-	return ecdsa.Verify(pubKey.key, data, sig.r, sig.s)
+	x, y := elliptic.UnmarshalCompressed(elliptic.P256(), pubKey)
+	key := &ecdsa.PublicKey{
+		Curve: elliptic.P256(),
+		X:     x,
+		Y:     y,
+	}
+
+	return ecdsa.Verify(key, data, sig.R, sig.S)
 }
